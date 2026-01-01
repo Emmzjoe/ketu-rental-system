@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ketu Kakahala Vehicle Rentals - Database Version</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-teal: #008B8B;
+            --light-teal: #E0F2F1;
+            --primary-orange: #FF8C00;
+            --light-orange: #FFE4B5;
+            --text-dark: #333;
+            --text-light: #666;
+            --success: #4CAF50;
+            --danger: #f44336;
+            --warning: #ff9800;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, var(--light-teal) 0%, var(--light-orange) 100%);
+            min-height: 100vh;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.connected {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .connection-status.disconnected {
+            background: #f44336;
+            color: white;
+        }
+
+        .connection-status.checking {
+            background: #ff9800;
+            color: white;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .spinner {
+            border: 4px solid var(--light-teal);
+            border-top: 4px solid var(--primary-teal);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #c62828;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: var(--primary-teal);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // API Configuration
+        const API_BASE_URL = 'http://localhost:3001/api';
+
+        // API Helper Functions
+        const api = {
+            async checkHealth() {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                if (!response.ok) throw new Error('Server not responding');
+                return response.json();
+            },
+
+            async getVehicles() {
+                const response = await fetch(`${API_BASE_URL}/vehicles`);
+                if (!response.ok) throw new Error('Failed to fetch vehicles');
+                return response.json();
+            },
+
+            async getCustomers() {
+                const response = await fetch(`${API_BASE_URL}/customers`);
+                if (!response.ok) throw new Error('Failed to fetch customers');
+                return response.json();
+            },
+
+            async getBookings() {
+                const response = await fetch(`${API_BASE_URL}/bookings`);
+                if (!response.ok) throw new Error('Failed to fetch bookings');
+                return response.json();
+            },
+
+            async createBooking(data) {
+                const response = await fetch(`${API_BASE_URL}/bookings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (!response.ok) throw new Error('Failed to create booking');
+                return response.json();
+            }
+        };
+
+        function App() {
+            const [connectionStatus, setConnectionStatus] = useState('checking');
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [data, setData] = useState({
+                vehicles: [],
+                customers: [],
+                bookings: []
+            });
+
+            // Check database connection
+            useEffect(() => {
+                async function checkConnection() {
+                    try {
+                        await api.checkHealth();
+                        setConnectionStatus('connected');
+                        loadData();
+                    } catch (err) {
+                        setConnectionStatus('disconnected');
+                        setError('Cannot connect to database server. Please make sure the backend is running on http://localhost:3001');
+                        setLoading(false);
+                    }
+                }
+                checkConnection();
+
+                // Check connection every 30 seconds
+                const interval = setInterval(checkConnection, 30000);
+                return () => clearInterval(interval);
+            }, []);
+
+            async function loadData() {
+                try {
+                    setLoading(true);
+                    const [vehicles, customers, bookings] = await Promise.all([
+                        api.getVehicles(),
+                        api.getCustomers(),
+                        api.getBookings()
+                    ]);
+                    setData({ vehicles, customers, bookings });
+                    setError(null);
+                } catch (err) {
+                    setError('Failed to load data: ' + err.message);
+                } finally {
+                    setLoading(false);
+                }
+            }
+
+            if (connectionStatus === 'disconnected') {
+                return (
+                    <div className="app-container">
+                        <div className="connection-status disconnected">
+                            ⚠️ Disconnected from Database
+                        </div>
+                        <div className="error-message">
+                            <h2>Database Connection Error</h2>
+                            <p>{error}</p>
+                            <h3>To fix this:</h3>
+                            <ol>
+                                <li>Open Terminal</li>
+                                <li>Navigate to: <code>cd "/Users/emmz/Downloads/Rental App Backend"</code></li>
+                                <li>Run: <code>npm start</code></li>
+                                <li>Refresh this page</li>
+                            </ol>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (loading) {
+                return (
+                    <>
+                        <div className="connection-status checking">
+                            ⏳ Loading...
+                        </div>
+                        <div className="loading-overlay">
+                            <div className="spinner"></div>
+                            <p style={{marginTop: '20px', color: 'var(--text-dark)'}}>Loading data from database...</p>
+                        </div>
+                    </>
+                );
+            }
+
+            return (
+                <div className="app-container">
+                    <div className="connection-status connected">
+                        ✓ Connected to Database
+                    </div>
+                    <h1>🚗 Ketu Kakahala Vehicle Rentals</h1>
+                    <div style={{
+                        background: 'white',
+                        padding: '40px',
+                        borderRadius: '15px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                        textAlign: 'center'
+                    }}>
+                        <h2 style={{color: 'var(--primary-teal)', marginBottom: '20px'}}>Database Connected Successfully! 🎉</h2>
+                        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '30px'}}>
+                            <div style={{background: 'var(--light-teal)', padding: '20px', borderRadius: '10px'}}>
+                                <h3 style={{color: 'var(--primary-teal)'}}>🚗 Vehicles</h3>
+                                <p style={{fontSize: '2em', fontWeight: 'bold', color: 'var(--text-dark)'}}>{data.vehicles.length}</p>
+                            </div>
+                            <div style={{background: 'var(--light-orange)', padding: '20px', borderRadius: '10px'}}>
+                                <h3 style={{color: 'var(--primary-orange)'}}>👥 Customers</h3>
+                                <p style={{fontSize: '2em', fontWeight: 'bold', color: 'var(--text-dark)'}}>{data.customers.length}</p>
+                            </div>
+                            <div style={{background: 'var(--light-teal)', padding: '20px', borderRadius: '10px'}}>
+                                <h3 style={{color: 'var(--primary-teal)'}}>📅 Bookings</h3>
+                                <p style={{fontSize: '2em', fontWeight: 'bold', color: 'var(--text-dark)'}}>{data.bookings.length}</p>
+                            </div>
+                        </div>
+                        <div style={{marginTop: '40px', padding: '20px', background: '#e3f2fd', borderRadius: '10px'}}>
+                            <h3 style={{marginBottom: '15px'}}>✅ Your localStorage quota issue is solved!</h3>
+                            <p style={{color: 'var(--text-dark)', lineHeight: '1.6'}}>
+                                Your data is now stored in a proper SQLite database instead of browser localStorage.
+                                This means no more "quota exceeded" errors, and you can store unlimited license documents and images!
+                            </p>
+                            <p style={{marginTop: '15px', color: 'var(--text-dark)', lineHeight: '1.6'}}>
+                                <strong>Next Step:</strong> I can now update your full rental app to use this database.
+                                The old version (<code>ketu-rental (1).html</code>) will still work with localStorage for now.
+                            </p>
+                        </div>
+                        <button
+                            onClick={loadData}
+                            style={{
+                                marginTop: '30px',
+                                padding: '15px 30px',
+                                background: 'var(--primary-teal)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '16px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            🔄 Refresh Data
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
