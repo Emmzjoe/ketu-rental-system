@@ -3,6 +3,11 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { initializeDatabase, getDb, saveDatabase } = require('./database');
 
+// Import new routes
+const subscriptionsRouter = require('./routes/subscriptions');
+const invoicesRouter = require('./routes/invoices');
+const receiptsRouter = require('./routes/receipts');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -10,6 +15,11 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+// New API routes for subscription system
+app.use('/api/subscriptions', subscriptionsRouter);
+app.use('/api/invoices', invoicesRouter);
+app.use('/api/receipts', receiptsRouter);
 
 // Helper to convert sql.js results to array of objects
 function resultsToArray(results) {
@@ -541,6 +551,13 @@ initializeDatabase().then(() => {
         console.log(`  GET    /api/documents`);
         console.log(`  GET    /api/company`);
         console.log(`  GET    /api/stats`);
+        console.log(`\n💳 New Subscription & Billing System:`);
+        console.log(`  GET    /api/subscriptions/plans`);
+        console.log(`  GET    /api/invoices`);
+        console.log(`  GET    /api/receipts`);
+        console.log(`  POST   /api/subscriptions/subscribe`);
+        console.log(`  POST   /api/invoices`);
+        console.log(`  GET    /api/receipts/:id/pdf`);
         console.log(`\n✅ Ready to accept requests\n`);
     });
 }).catch(err => {
