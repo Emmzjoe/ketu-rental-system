@@ -14,48 +14,23 @@ async function runMigration() {
         const migrationPath = path.join(__dirname, 'migrations', 'add-subscription-system.sql');
         const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
 
-        // Split SQL statements (simple split by semicolon)
-        const statements = migrationSQL
-            .split(';')
-            .map(stmt => stmt.trim())
-            .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
+        console.log(`📝 Executing SQL migration file...\n`);
 
-        console.log(`📝 Found ${statements.length} SQL statements to execute\n`);
-
-        // Execute each statement
-        let successCount = 0;
-        let skipCount = 0;
-
-        for (let i = 0; i < statements.length; i++) {
-            const statement = statements[i];
-
-            // Skip comments
-            if (statement.startsWith('--') || statement.length === 0) {
-                continue;
-            }
-
-            try {
-                db.run(statement);
-                successCount++;
-
-                // Log progress for CREATE TABLE statements
-                if (statement.includes('CREATE TABLE')) {
-                    const tableName = statement.match(/CREATE TABLE (?:IF NOT EXISTS )?(\w+)/)?.[1];
-                    console.log(`✅ Created table: ${tableName}`);
-                } else if (statement.includes('INSERT INTO')) {
-                    const tableName = statement.match(/INSERT INTO (\w+)/)?.[1];
-                    if (tableName) {
-                        skipCount++;
-                    }
-                } else if (statement.includes('CREATE INDEX')) {
-                    const indexName = statement.match(/CREATE INDEX (?:IF NOT EXISTS )?(\w+)/)?.[1];
-                    console.log(`📊 Created index: ${indexName}`);
-                }
-            } catch (error) {
-                console.error(`❌ Error executing statement ${i + 1}:`, error.message);
-                console.error(`Statement: ${statement.substring(0, 100)}...`);
-            }
+        // Execute the entire SQL file at once using db.exec()
+        // This handles multi-line statements and inline comments correctly
+        try {
+            db.exec(migrationSQL);
+            console.log('✅ All SQL statements executed successfully\n');
+        } catch (error) {
+            console.error('❌ Error executing migration SQL:', error.message);
+            throw error;
         }
+
+        // Count what was created by analyzing the SQL file
+        const statements = migrationSQL.split(';').filter(s => s.trim().length > 0);
+        const tableCount = statements.filter(s => s.includes('CREATE TABLE')).length;
+        const insertCount = statements.filter(s => s.includes('INSERT INTO')).length;
+        const indexCount = statements.filter(s => s.includes('CREATE INDEX')).length;
 
         // Save database
         saveDatabase();
@@ -64,9 +39,9 @@ async function runMigration() {
         console.log('✅ Migration completed successfully!');
         console.log('='.repeat(60));
         console.log(`\n📊 Summary:`);
-        console.log(`   • Total statements: ${statements.length}`);
-        console.log(`   • Successfully executed: ${successCount}`);
-        console.log(`   • Default data inserted: ${skipCount > 0 ? 'Yes' : 'No'}`);
+        console.log(`   • Tables created: ${tableCount}`);
+        console.log(`   • Default data rows: ${insertCount}`);
+        console.log(`   • Indexes created: ${indexCount}`);
 
         // Verify tables were created
         console.log('\n🔍 Verifying tables...');

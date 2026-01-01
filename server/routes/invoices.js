@@ -212,9 +212,9 @@ router.post('/', (req, res) => {
                 amountPaid, balance, status, dueDate, issueDate, notes, termsAndConditions
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15.0, ?, ?, ?, 0, ?, 'draft', ?, ?, ?, ?)
         `, [
-            invoiceNumber, customerId, customerName, customerEmail, customerPhone, customerAddress,
-            subscriptionId, bookingId, type, subtotal, totalTax, discount, total, balance,
-            invoiceDueDate, issueDate, notes, termsAndConditions
+            invoiceNumber, customerId, customerName, customerEmail || null, customerPhone || null, customerAddress || null,
+            subscriptionId || null, bookingId || null, type, subtotal, totalTax, discount, total, balance,
+            invoiceDueDate, issueDate, notes || null, termsAndConditions || null
         ]);
 
         // Get the invoice ID
@@ -331,7 +331,22 @@ router.post('/:id/payment', (req, res) => {
                 invoiceId, receiptNumber, customerId, customerName, amount,
                 paymentMethod, paymentStatus, transactionId, paymentDate, notes
             ) VALUES (?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)
-        `, [id, receiptNumber, invoice[2], invoice[3], amount, paymentMethod, transactionId, paymentDate, notes]);
+        `, [id, receiptNumber, invoice[2], invoice[3], amount, paymentMethod, transactionId || null, paymentDate, notes || null]);
+
+        // Get the transaction ID
+        const transactionResult = db.exec(`
+            SELECT id FROM payment_transactions WHERE receiptNumber = ?
+        `, [receiptNumber]);
+
+        const transactionRecordId = transactionResult[0].values[0][0];
+
+        // Create receipt record
+        db.run(`
+            INSERT INTO receipts (
+                receiptNumber, invoiceId, transactionId, customerId, customerName,
+                amount, paymentMethod, issueDate, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [receiptNumber, id, transactionRecordId, invoice[2], invoice[3], amount, paymentMethod, paymentDate, notes || null]);
 
         saveDatabase();
 
